@@ -68,6 +68,11 @@ struct CompactControlsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .help("Hides the Dock icon. Uncheck to get the Dock icon and window back.")
+
+            Toggle("Release the headphones when I'm not using the app", isOn: $settings.releaseWhenIdle)
+                .toggleStyle(.checkbox)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -210,7 +215,7 @@ struct CompactControlsView: View {
     private var promptText: String {
         switch controller.connectionState {
         case .connecting, .initializing: return "Connecting\u{2026}"
-        case .failed: return "Couldn't reach the headphones.\nMake sure they're on and paired."
+        case .failed: return controller.lastError ?? "Couldn't reach the headphones.\nMake sure they're on and paired."
         default: return "Not connected."
         }
     }
