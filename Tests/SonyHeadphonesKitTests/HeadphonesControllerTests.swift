@@ -143,7 +143,7 @@ final class HeadphonesControllerTests: XCTestCase {
         controller.autoConnect()
         await handshake(connection)
         XCTAssertNil(controller.ambientSound)
-        let off = AmbientSoundState(mode: .off, level: 0)
+        let off = AmbientSoundState(mode: .off, level: 1)
         connection.reply([Opcode.ambientSoundControlRet, 0x15, 1, 0, 0, 0, 0])
         await settle()
         await drain(connection)
@@ -152,19 +152,318 @@ final class HeadphonesControllerTests: XCTestCase {
         XCTAssertFalse(connection.payloads.contains { $0.first == Opcode.ambientSoundControlSet })
     }
 
-    func testDroppedLinkReconnectsOnlyWhileUseContinues() async {
+    func testConnectIgnoresZeroPlaceholderThenUsesXM6State() async {
+        for opcode: UInt8 in [0x67, 0x69] {
+            let (controller, connection) = makeController()
+            defer { controller.disconnect() }
+            controller.setControlSurface(UUID(), visible: true)
+            await handshake(connection)
+            connection.ack()
+            await settle()
+            XCTAssertEqual(connection.payloads.last, [0x66, 0x17])
+            connection.reply([0x67, 0x17, 0, 0, 0, 0, 0])
+            await settle()
+            XCTAssertNil(controller.ambientSound)
+            connection.ack()
+            await settle()
+            XCTAssertEqual(connection.payloads.last, [0x66, 0x19])
+            connection.reply([opcode, 0x19, 1, 1, 0, 0, 9, 0, 0])
+            await settle()
+            XCTAssertEqual(controller.ambientSound?.mode, .noiseCancelling)
+            XCTAssertEqual(controller.ambientSound?.level, 9)
+            connection.reply([0x67, 0x17, 0, 0, 0, 0, 0])
+            await settle()
+            XCTAssertEqual(controller.ambientSound?.mode, .noiseCancelling)
+            XCTAssertEqual(controller.ambientSound?.level, 9)
+            await drain(connection)
+            XCTAssertFalse(connection.payloads.contains { $0.first == 0x68 })
+        }
+    }
+
+    func testZeroPlaceholderRemainsUnknownAfterInitialStateTimeout() async throws {
         let (controller, connection) = makeController()
+        defer { controller.disconnect() }
+        controller.setControlSurface(UUID(), visible: true)
+        await handshake(connection)
+        connection.reply([0x67, 0x17, 0, 0, 0, 0, 0])
+        await drain(connection)
+        try await Task.sleep(for: .seconds(6))
+        XCTAssertTrue(controller.initialStateTimedOut)
+        XCTAssertNil(controller.ambientSound)
+        XCTAssertFalse(connection.payloads.contains { $0.first == 0x68 })
+    }
+
+    func testXM6AmbientStateAndUserLevelRemainInRange() async throws {
+        let (controller, connection) = makeController()
+        defer { controller.disconnect() }
+        controller.setControlSurface(UUID(), visible: true)
+        await handshake(connection)
+        await drain(connection)
+        connection.reply([0x69, 0x19, 1, 1, 1, 0, 10, 0, 0])
+        await settle()
+        XCTAssertEqual(controller.ambientSound?.mode, .ambientSound)
+        XCTAssertEqual(controller.ambientSound?.level, 10)
+        for (level, expected): (Int, UInt8) in [(0, 1), (21, 20)] {
+            var state = try XCTUnwrap(controller.ambientSound)
+            state.level = level
+            controller.setAmbientSound(state)
+            XCTAssertEqual(controller.ambientSound?.level, Int(expected))
+            XCTAssertEqual(connection.payloads.last, [0x68, 0x17, 1, 1, 1, 0, expected])
+            connection.ack()
+            await settle()
+        }
+        connection.reply([0x69, 0x19, 1, 1, 1, 0, 1, 0, 0])
+        await settle()
+        XCTAssertEqual(controller.ambientSound?.level, 1)
+    }
+
+    func testLegacyZeroPlaceholderStillAppliesOriginalStartupDefaultsOnce() async {
+        let (controller, connection) = makeController()
+        defer { controller.disconnect() }
+        controller.releaseWhenIdle = false
+        await handshake(connection)
+        connection.reply([0x67, 0x17, 0, 0, 0, 0, 0])
+        await settle()
+        await drain(connection)
+        XCTAssertEqual(controller.ambientSound?.mode, .noiseCancelling)
+        XCTAssertEqual(controller.ambientSound?.level, 15)
+        XCTAssertEqual(connection.payloads.filter { $0.first == 0x68 }, [[0x68, 0x17, 1, 1, 0, 0, 15]])
+        connection.reply([0x69, 0x17, 1, 0, 0, 0, 9])
+        await settle()
+        XCTAssertEqual(controller.ambientSound?.mode, .off)
+        XCTAssertEqual(controller.ambientSound?.level, 9)
+        XCTAssertEqual(connection.payloads.filter { $0.first == 0x68 }.count, 1)
+    }
+
+    func testLegacyStartupDefaultsPreserveAmbientModeAndNonzeroLevel() async {
+        let fixtures: [([UInt8], AmbientSoundMode, Int, [[UInt8]])] = [
+            ([0x67, 0x17, 1, 0, 0, 0, 9], .noiseCancelling, 9, [[0x68, 0x17, 1, 1, 0, 0, 9]]),
+            ([0x67, 0x17, 1, 1, 1, 0, 0], .ambientSound, 15, [[0x68, 0x17, 1, 1, 1, 0, 15]]),
+            ([0x67, 0x19, 1, 1, 1, 0, 10, 0, 0], .ambientSound, 10, []),
+        ]
+        for (report, mode, level, writes) in fixtures {
+            let (controller, connection) = makeController()
+            defer { controller.disconnect() }
+            controller.releaseWhenIdle = false
+            await handshake(connection)
+            connection.reply(report)
+            await settle()
+            await drain(connection)
+            XCTAssertEqual(controller.ambientSound?.mode, mode)
+            XCTAssertEqual(controller.ambientSound?.level, level)
+            XCTAssertEqual(connection.payloads.filter { $0.first == 0x68 }, writes)
+        }
+    }
+
+    func testRemoteCloseYieldsDespiteVisibleSurfaceAndBackgroundQueries() async {
+        let (controller, connection) = makeController()
+        defer { controller.disconnect() }
+        let surface = UUID()
+        controller.setControlSurface(surface, visible: true)
+        await handshake(connection)
+        // The first state query is awaiting ACK; protocol traffic is not user work.
+        connection.onEvent?(.closed)
+        connection.reply([0x01, 0, 0, 0, 0, 0, 0, 0])
+        await settle()
+        XCTAssertEqual(connection.addresses.count, 1)
+        XCTAssertEqual(controller.connectionState, .disconnected)
+        let message = "Another device is using the headphones. Click Connect or Try Again, or change a setting here, to take them back."
+        XCTAssertEqual(controller.lastError, message)
+        controller.setControlSurface(surface, visible: true)
+        controller.handleConnectTimeout()
+        connection.onEvent?(.closed)
+        connection.onEvent?(.opened)
+        await settle()
+        XCTAssertEqual(connection.addresses.count, 1)
+        XCTAssertEqual(controller.connectionState, .disconnected)
+        XCTAssertEqual(controller.lastError, message)
+    }
+
+    func testNewOrReopenedSurfaceReacquiresAfterYield() async {
+        for reopen in [false, true] {
+            let (controller, connection) = makeController()
+            defer { controller.disconnect() }
+            let surface = UUID()
+            controller.connect(toAddress: "selected-headset", name: "My headphones")
+            controller.setControlSurface(surface, visible: true)
+            await handshake(connection)
+            connection.onEvent?(.closed)
+            await settle()
+            XCTAssertEqual(controller.connectionState, .disconnected)
+            if reopen {
+                controller.setControlSurface(surface, visible: false)
+                XCTAssertEqual(connection.addresses.count, 1)
+            }
+            controller.setControlSurface(reopen ? surface : UUID(), visible: true)
+            XCTAssertEqual(connection.addresses, ["selected-headset", "selected-headset"])
+            XCTAssertEqual(controller.connectionState, .connecting)
+            XCTAssertNil(controller.lastError)
+            await handshake(connection)
+            XCTAssertEqual(controller.connectionState, .connected)
+        }
+    }
+
+    func testCommandReacquiresAfterYield() async {
+        let (controller, connection) = makeController()
+        defer { controller.disconnect() }
         controller.setControlSurface(UUID(), visible: true)
         await handshake(connection)
         connection.onEvent?(.closed)
         await settle()
+        XCTAssertEqual(controller.connectionState, .disconnected)
+        controller.setPauseWhenTakenOff(true)
         XCTAssertEqual(connection.addresses.count, 2)
         XCTAssertEqual(controller.connectionState, .connecting)
-        controller.disconnect()
+        XCTAssertNil(controller.lastError)
+        await handshake(connection)
+        await drain(connection)
+        XCTAssertEqual(connection.payloads.filter { $0 == SonyCommands.buildPauseWhenTakenOffSet(true) }.count, 1)
+    }
+
+    func testExplicitConnectReacquiresAfterYield() async {
+        let (controller, connection) = makeController()
+        defer { controller.disconnect() }
+        controller.autoConnect()
+        await handshake(connection)
+        connection.onEvent?(.closed)
+        await settle()
+        XCTAssertEqual(controller.connectionState, .disconnected)
+        controller.autoConnect()
+        XCTAssertEqual(connection.addresses.count, 2)
+        XCTAssertEqual(controller.connectionState, .connecting)
+        XCTAssertNil(controller.lastError)
+        await handshake(connection)
+        XCTAssertEqual(controller.connectionState, .connected)
+    }
+
+    func testRemoteCloseWithPendingCommandReconnects() async {
+        let (controller, connection) = makeController()
+        defer { controller.disconnect() }
+        controller.setControlSurface(UUID(), visible: true)
+        await handshake(connection)
+        controller.setPauseWhenTakenOff(true)
+        XCTAssertFalse(connection.payloads.contains(SonyCommands.buildPauseWhenTakenOffSet(true)))
         connection.onEvent?(.closed)
         await settle()
         XCTAssertEqual(connection.addresses.count, 2)
+        XCTAssertEqual(controller.connectionState, .connecting)
+        XCTAssertNil(controller.lastError)
+        await handshake(connection)
+        await drain(connection)
+        XCTAssertEqual(connection.payloads.filter { $0 == SonyCommands.buildPauseWhenTakenOffSet(true) }.count, 1)
+    }
+
+    func testRemoteCloseWithCommandAwaitingAckReconnects() async {
+        let (controller, connection) = makeController()
+        defer { controller.disconnect() }
+        controller.setControlSurface(UUID(), visible: true)
+        await handshake(connection)
+        await drain(connection)
+        controller.setPauseWhenTakenOff(true)
+        XCTAssertEqual(connection.payloads.last, SonyCommands.buildPauseWhenTakenOffSet(true))
+        connection.onEvent?(.closed)
+        await settle()
+        XCTAssertEqual(connection.addresses.count, 2)
+        XCTAssertEqual(controller.connectionState, .connecting)
+        XCTAssertNil(controller.lastError)
+        await handshake(connection)
+        await drain(connection)
+        // Preserve existing semantics: an interrupted transmitted command is not replayed.
+        XCTAssertEqual(connection.payloads.filter { $0 == SonyCommands.buildPauseWhenTakenOffSet(true) }.count, 1)
+    }
+
+    func testRemoteCloseWithEqualizerWriteReconnects() async {
+        let (controller, connection) = makeController()
+        defer { controller.disconnect() }
+        controller.setControlSurface(UUID(), visible: true)
+        await handshake(connection)
+        let bands = Array(repeating: 3, count: 10)
+        controller.setEqualizerBands(bands)
+        connection.onEvent?(.closed)
+        await settle()
+        XCTAssertEqual(connection.addresses.count, 2)
+        XCTAssertEqual(controller.connectionState, .connecting)
+        XCTAssertNil(controller.lastError)
+        try? await Task.sleep(for: .milliseconds(160))
+        await handshake(connection)
+        await drain(connection)
+        XCTAssertEqual(connection.payloads.filter { $0 == SonyCommands.buildEqualizerBandsSet(bands: bands, subtype: 0x04) }.count, 1)
+    }
+
+    func testLocalDisconnectAndIdleReleaseDoNotYield() async {
+        for idle in [false, true] {
+            let (controller, connection) = makeController()
+            defer { controller.disconnect() }
+            let surface = UUID()
+            controller.setControlSurface(surface, visible: true)
+            await handshake(connection)
+            // An event queued before our teardown must not be mistaken for takeover.
+            connection.onEvent?(.closed)
+            if idle {
+                controller.setControlSurface(surface, visible: false)
+                controller.disconnectIfIdle(now: .now.advanced(by: .seconds(21)))
+            } else {
+                controller.disconnect()
+            }
+            await settle()
+            connection.onEvent?(.closed)
+            await settle()
+            XCTAssertEqual(connection.addresses.count, 1)
+            XCTAssertEqual(controller.connectionState, .disconnected)
+            XCTAssertNil(controller.lastError)
+        }
+    }
+
+    func testRemoteCloseDuringHandshakeYields() async {
+        let (controller, connection) = makeController()
+        defer { controller.disconnect() }
+        controller.setControlSurface(UUID(), visible: true)
+        connection.onEvent?(.opened)
+        await settle()
+        XCTAssertEqual(controller.connectionState, .initializing)
+        connection.onEvent?(.closed)
+        await settle()
+        XCTAssertEqual(connection.addresses.count, 1)
         XCTAssertEqual(controller.connectionState, .disconnected)
+        XCTAssertNotNil(controller.lastError)
+    }
+
+    func testCloseBeforeOpenKeepsExistingRetryBehavior() async {
+        let (controller, connection) = makeController()
+        defer { controller.disconnect() }
+        controller.setControlSurface(UUID(), visible: true)
+        connection.onEvent?(.closed)
+        await settle()
+        XCTAssertEqual(connection.addresses.count, 2)
+        XCTAssertEqual(controller.connectionState, .connecting)
+        XCTAssertNil(controller.lastError)
+    }
+
+    func testRetryTeardownDiscardsQueuedCloseWithoutYielding() async {
+        let (controller, connection) = makeController()
+        defer { controller.disconnect() }
+        controller.setControlSurface(UUID(), visible: true)
+        connection.onEvent?(.opened)
+        await settle()
+        connection.onEvent?(.closed)
+        controller.handleConnectTimeout()
+        await settle()
+        XCTAssertEqual(connection.addresses.count, 2)
+        XCTAssertEqual(controller.connectionState, .connecting)
+        XCTAssertNil(controller.lastError)
+    }
+
+    func testLegacyRemoteCloseDoesNotYieldOrReconnect() async {
+        let (controller, connection) = makeController()
+        defer { controller.disconnect() }
+        controller.releaseWhenIdle = false
+        controller.setControlSurface(UUID(), visible: true)
+        await handshake(connection)
+        connection.onEvent?(.closed)
+        await settle()
+        XCTAssertEqual(connection.addresses.count, 1)
+        XCTAssertEqual(controller.connectionState, .disconnected)
+        XCTAssertNil(controller.lastError)
     }
 
     func testFailureClearsDeferredCommandAndUsesExistingErrorSurface() async {

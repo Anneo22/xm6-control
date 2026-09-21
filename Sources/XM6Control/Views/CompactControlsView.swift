@@ -15,7 +15,11 @@ struct CompactControlsView: View {
             header
 
             if controller.connectionState == .connected {
-                ancRow
+                if controller.releaseWhenIdle && controller.ambientSound == nil {
+                    LoadingRow()
+                } else {
+                    ancRow
+                }
 
                 if (controller.ambientSound?.mode ?? .noiseCancelling) == .ambientSound {
                     ambientSlider
@@ -107,7 +111,7 @@ struct CompactControlsView: View {
             Image(systemName: "speaker.wave.1").font(.caption2).foregroundStyle(.secondary)
             Slider(
                 value: Binding(
-                    get: { Double(controller.ambientSound?.level ?? 15) },
+                    get: { Double(max(1, controller.ambientSound?.level ?? 15)) },
                     // Falls back to a default state rather than bailing out: when the
                     // headphones never reported ambient sound, the old `guard` left a
                     // slider that moved under the cursor and silently did nothing.
@@ -117,7 +121,7 @@ struct CompactControlsView: View {
                         controller.setAmbientSound(state)
                     }
                 ),
-                in: 0...20, step: 1
+                in: 1...20, step: 1
             )
             .controlSize(.mini)
             .accessibilityLabel("Ambient sound level")
@@ -216,6 +220,7 @@ struct CompactControlsView: View {
         switch controller.connectionState {
         case .connecting, .initializing: return "Connecting\u{2026}"
         case .failed: return controller.lastError ?? "Couldn't reach the headphones.\nMake sure they're on and paired."
+        case .disconnected where controller.releaseWhenIdle: return controller.lastError ?? "Not connected."
         default: return "Not connected."
         }
     }

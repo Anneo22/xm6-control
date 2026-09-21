@@ -246,6 +246,8 @@ public final class HeadphonesController: ObservableObject {
     }
 
     public func setAmbientSound(_ state: AmbientSoundState) {
+        var state = state
+        state.level = max(1, min(20, state.level))
         ambientSound = state // optimistic; a NOTIFY will reconcile if the device disagrees
         enqueueCommand(SonyCommands.buildAmbientSoundSet(state))
     }
@@ -372,10 +374,21 @@ public final class HeadphonesController: ObservableObject {
             beginHandshake()
 
         case .closed:
+            let hasPendingWork = !pendingCommands.isEmpty || awaitingCommandAck || equalizerWriteTask != nil
+            // Local teardown detaches the transport delegate and invalidates queued
+            // events. An opened channel closing here is the headset yielding us out.
+            if releaseWhenIdle && (connectionState == .connected || connectionState == .initializing)
+                && !hasPendingWork {
+                // Clear the active target and timers; only fresh user activity should
+                // reacquire, not a surface that simply remained visible.
+                disconnect()
+                lastError = "Another device is using the headphones. Click Connect or Try Again, or change a setting here, to take them back."
+                return
+            }
             resetSessionState()
             connectionState = .disconnected
             if releaseWhenIdle && connectTarget != nil
-                && (!usage.shouldRelease() || !pendingCommands.isEmpty || equalizerWriteTask != nil) {
+                && (!usage.shouldRelease() || hasPendingWork) {
                 attemptConnect()
             }
 
@@ -469,7 +482,10 @@ public final class HeadphonesController: ObservableObject {
             requestFullState()
             startStateTimeout()
 
-        case .ambientSound(let state):
+        case .ambientSound(var state):
+            // XM6 answers 0x17 reads with a zero-update placeholder. Keep loading
+            // (or the last real state); legacy mode still applies its startup defaults.
+            if releaseWhenIdle && state.subtype == 0x17 && !state.isUpdate { return }
             // On the first report after connecting, apply the user's preferred startup
             // defaults: never sit in "Off" (use Noise Cancelling), and never keep an
             // ambient level of 0 (use 15). Later reports (e.g. changes made on the
@@ -484,6 +500,7 @@ public final class HeadphonesController: ObservableObject {
                     return
                 }
             }
+            if releaseWhenIdle { state.level = max(1, state.level) }
             ambientSound = state
         case .battery(let status):
             battery = status
@@ -526,10 +543,11 @@ public final class HeadphonesController: ObservableObject {
     }
 
     private func requestFullState() {
-        // Ask for ambient sound in both known v2 dialects; the device answers whichever
-        // it speaks and (per the reference implementation) ignores the other.
+        // XM6 firmware 3.0.0 reports real state on 0x19; 0x17 can be a placeholder.
+        // Keep the older queries for firmware using those layouts.
         enqueue(SonyCommands.buildAmbientSoundGet(subtype: 0x15))
         enqueue(SonyCommands.buildAmbientSoundGet(subtype: 0x17))
+        enqueue(SonyCommands.buildAmbientSoundGet(subtype: 0x19))
         enqueue(SonyCommands.buildBatteryGet())
         enqueue(SonyCommands.buildSpeakToChatEnabledGet())
         enqueue(SonyCommands.buildSpeakToChatConfigGet())
