@@ -78,12 +78,12 @@ final class HeadphonesControllerTests: XCTestCase {
         for payload: [UInt8] in [[0xe7, 5], [0xe9, 5, 3], [0xe3, 5, 0, 0], [0xe1, 5, 3, 0, 1, 3, 0]] {
             connection.reply(payload)
         }
-        connection.onEvent?(.dataReceived(SonyMessage(type: .command2, sequenceNumber: 0, payload: [0xe9, 5, 1]).encode()))
+        connection.onEvent?(.dataReceived(SonyMessage(type: .command2, sequenceNumber: 0, payload: [0xe9, 5, 1, 0]).encode()))
         await settle()
         XCTAssertEqual(controller.soundQuality, .quality)
         XCTAssertEqual(controller.soundQualityObservedAt, receipt)
         XCTAssertEqual(controller.supportedSoundQualityModes, [.quality, .stable, .lowLatency])
-        connection.reply([0xe9, 5, 2])
+        connection.reply([0xe9, 5, 2, 0])
         await settle()
         XCTAssertEqual(controller.soundQuality, .lowLatency)
         XCTAssertGreaterThan(try XCTUnwrap(controller.soundQualityObservedAt), receipt)
@@ -130,17 +130,17 @@ final class HeadphonesControllerTests: XCTestCase {
         let offset = connection.payloads.count
         XCTAssertTrue(controller.setSoundQuality(.stable))
         XCTAssertTrue(controller.setSoundQuality(.lowLatency))
-        XCTAssertEqual(Array(connection.payloads.dropFirst(offset)), [[0xe8, 5, 1]])
+        XCTAssertEqual(Array(connection.payloads.dropFirst(offset)), [[0xe8, 5, 1, 1]])
         XCTAssertEqual(controller.soundQuality, .quality)
         XCTAssertEqual(controller.soundQualityObservedAt, receipt)
         connection.ack()
         await settle()
-        XCTAssertEqual(Array(connection.payloads.dropFirst(offset)), [[0xe8, 5, 1], [0xe8, 5, 2]])
+        XCTAssertEqual(Array(connection.payloads.dropFirst(offset)), [[0xe8, 5, 1, 1], [0xe8, 5, 2, 1]])
         connection.ack()
         await settle()
         XCTAssertEqual(controller.soundQuality, .quality)
         XCTAssertEqual(controller.soundQualityObservedAt, receipt)
-        connection.reply([0xe9, 5, 2])
+        connection.reply([0xe9, 5, 2, 0])
         await settle()
         XCTAssertEqual(controller.soundQuality, .lowLatency)
     }
@@ -184,7 +184,7 @@ final class HeadphonesControllerTests: XCTestCase {
             await drain(connection)
             XCTAssertFalse(connection.payloads.contains([0xe0, 5]))
             XCTAssertFalse(connection.payloads.contains([0xe6, 5]))
-            XCTAssertFalse(connection.payloads.contains([0xe8, 5, 1]))
+            XCTAssertFalse(connection.payloads.contains([0xe8, 5, 1, 1]))
             controller.disconnect()
         }
     }

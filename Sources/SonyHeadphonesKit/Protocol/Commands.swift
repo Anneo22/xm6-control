@@ -202,10 +202,13 @@ public enum SonyCommands {
         [Opcode.audioGetParam, Subtype.soundQuality]
     }
 
-    /// The ProtocolV2T1 reference defines this write. A live XM6 setter has not
-    /// yet been tested; changing the preference may disconnect Bluetooth audio.
+    /// XM6 FW 3.1.5 quality/stable writes require the classic/LE variant's fourth byte (0x01).
+    /// Three-byte writes and a 0x00 trailer left those preferences unchanged in live tests.
+    /// Low-latency requests remain unconfirmed despite the advertised mode.
+    /// The reference calls that extra EnableDisable field "value2"; its meaning
+    /// is undocumented. Changing the preference may disconnect Bluetooth audio.
     public static func buildSoundQualitySet(_ mode: SoundQualityMode) -> [UInt8] {
-        [Opcode.audioSetParam, Subtype.soundQuality, mode.rawValue]
+        [Opcode.audioSetParam, Subtype.soundQuality, mode.rawValue, 0x01]
     }
 
     /// FW 3.1.5 capture: e1 05 03 00 01 02 00. The final byte is the
@@ -225,9 +228,13 @@ public enum SonyCommands {
     }
 
     public static func decodeSoundQuality(_ payload: [UInt8]) -> SoundQualityMode? {
-        guard payload.count == 3,
-              payload[0] == Opcode.audioRetParam || payload[0] == Opcode.audioNotifyParam,
-              payload[1] == Subtype.soundQuality else { return nil }
+        guard payload.count >= 3, payload[1] == Subtype.soundQuality else { return nil }
+        if payload[0] == Opcode.audioRetParam {
+            guard payload.count == 3 else { return nil }
+        } else if payload[0] == Opcode.audioNotifyParam {
+            // Notifications carry SwitchingStream: none, LE Audio, or classic.
+            guard payload.count == 4, payload[3] <= 2 else { return nil }
+        } else { return nil }
         return SoundQualityMode(rawValue: payload[2])
     }
 

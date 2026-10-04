@@ -79,7 +79,7 @@ The menu bar icon is drawn rather than taken from the photo. A menu bar image ha
 
 ### Bluetooth quality and local commands
 
-The **Bluetooth Quality** selector reads the headset's available modes and current preference. A change can briefly interrupt audio. The displayed value changes only when the headset reports it. This preference does not identify or force the negotiated audio codec, and cannot add LDAC or LE Audio support to macOS.
+The **Bluetooth Quality** selector reads the headset's available modes and current preference. A change can briefly interrupt audio. The displayed value changes only when the headset reports it. This preference does not identify or force the negotiated audio codec, and cannot add LDAC or LE Audio support to macOS. On tested XM6 firmware 3.1.5, quality and stable-connection changes were confirmed; low latency was advertised but its writes were ignored. An advertised mode does not guarantee that a write will be accepted.
 
 With the app installed at `/Applications/XM6 Control.app`, run:
 

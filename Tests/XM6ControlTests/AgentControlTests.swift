@@ -19,7 +19,7 @@ private final class LocalTestConnection: HeadphonesConnection {
             case [0xe0, 5]: reply([0xe1, 5, 3, 0, 1, 2, 0])
             case [0xe6, 5]: qualityGet?()
             default:
-                if message.payload.count == 3 && message.payload.prefix(2) == [0xe8, 5] {
+                if message.payload.count == 4 && message.payload.prefix(2) == [0xe8, 5] && message.payload[3] == 1 {
                     qualitySet?(message.payload[2])
                 }
             }
@@ -57,8 +57,8 @@ final class AgentControlTests: XCTestCase {
         let (controller, connection, service, directory) = try await fixture()
         defer { controller.disconnect(); try? FileManager.default.removeItem(at: directory) }
         connection.qualitySet = { mode in
-            connection.reply([0xe9, 5, mode])
-            connection.reply([0xe9, 5, 2])
+            connection.reply([0xe9, 5, mode, 0])
+            connection.reply([0xe9, 5, 2, 0])
         }
         connection.qualityGet = { connection.reply([0xe7, 5, controller.soundQuality?.rawValue ?? 0]) }
         let response = try request(directory, value: "stable")
