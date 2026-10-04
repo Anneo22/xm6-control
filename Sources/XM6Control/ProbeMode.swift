@@ -47,6 +47,9 @@ enum ProbeMode {
         }
 
         let probe = HeadphonesController()
+        probe.applyConnectDefaults = false
+        // Read-only probes must not apply the legacy startup defaults.
+        probe.releaseWhenIdle = true
         controller = probe
         probe.rawMessageHandler = { type, payload in
             emit("RX[\(type == .command2 ? "T2" : "T1")] \(hex(payload))")

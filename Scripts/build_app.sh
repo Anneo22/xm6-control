@@ -15,7 +15,7 @@ APP_NAME="XM6 Control"
 BUNDLE_ID="com.local.xm6control"
 BUILD_DIR=".build/${CONFIG}"
 APP_DIR=".build/${APP_NAME}.app"
-SIGN_IDENTITY="XM6Dev"
+SIGN_IDENTITY="${XM6_SIGN_IDENTITY:-XM6Dev}"
 
 echo "==> Building (${CONFIG})..."
 swift build -c "${CONFIG}"
@@ -37,7 +37,7 @@ elif [ ! -f "${ICON_OUT}" ]; then
 fi
 
 echo "==> Assembling ${APP_NAME}.app..."
-rm -rf "${APP_DIR}"
+if [ -d "${APP_DIR}" ]; then /usr/bin/trash "${APP_DIR}"; fi
 mkdir -p "${APP_DIR}/Contents/MacOS"
 mkdir -p "${APP_DIR}/Contents/Resources"
 

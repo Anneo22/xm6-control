@@ -27,6 +27,9 @@ public final class HeadphonesController: ObservableObject {
     @Published public private(set) var listeningMode: ListeningMode?
     @Published public private(set) var bgmRoomSize: BGMRoomSize?
     @Published public private(set) var devices: [MultipointDevice]?
+    @Published public private(set) var soundQuality: SoundQualityMode?
+    @Published public private(set) var supportedSoundQualityModes: [SoundQualityMode]?
+    @Published public private(set) var soundQualityObservedAt: Date?
 
     /// Raw BGM/cinema flags as last reported; listeningMode is derived from them.
     private var bgmEnabled = false
@@ -44,6 +47,10 @@ public final class HeadphonesController: ObservableObject {
             protocolLog.isEnabled = protocolLoggingEnabled
         }
     }
+
+    /// Legacy startup preferences: change Off to noise cancelling and level 0 to
+    /// 15 on the first ambient report. Read-only clients can disable these writes.
+    public var applyConnectDefaults = true
 
     public var releaseWhenIdle: Bool {
         get { usage.releaseWhenIdle }
@@ -235,6 +242,28 @@ public final class HeadphonesController: ObservableObject {
         requestFullState()
     }
 
+    /// Reconnects on user activity if needed. The v2 handshake requests these
+    /// reports on a new session; an existing session queues both reads here.
+    public func refreshSoundQuality() {
+        applyConnectDefaults = false
+        recordCommand()
+        connectIfNeeded()
+        guard connectionState == .connected, protocolVersion == .v2 else { return }
+        requestSoundQuality()
+    }
+
+    /// Returns whether the write was queued, not whether the device applied it.
+    /// Only device RET/NOTIFY reports change the observed preference and timestamp.
+    @discardableResult
+    public func setSoundQuality(_ mode: SoundQualityMode) -> Bool {
+        guard connectionState == .connected, protocolVersion == .v2,
+              let current = soundQuality, soundQualityObservedAt != nil,
+              let supported = supportedSoundQualityModes,
+              supported.contains(current), supported.contains(mode) else { return false }
+        enqueueCommand(SonyCommands.buildSoundQualitySet(mode))
+        return true
+    }
+
     // MARK: - Raw access (developer tooling)
 
     /// Called for every decoded inbound message; used by the XM6Probe tool.
@@ -362,6 +391,9 @@ public final class HeadphonesController: ObservableObject {
         listeningMode = nil
         bgmRoomSize = nil
         devices = nil
+        soundQuality = nil
+        supportedSoundQualityModes = nil
+        soundQualityObservedAt = nil
         bgmEnabled = false
         cinemaEnabled = false
         protocolVersion = .unknown
@@ -490,7 +522,7 @@ public final class HeadphonesController: ObservableObject {
             // defaults: never sit in "Off" (use Noise Cancelling), and never keep an
             // ambient level of 0 (use 15). Later reports (e.g. changes made on the
             // headphones themselves) are mirrored untouched.
-            if !releaseWhenIdle && !didApplyConnectDefaults {
+            if applyConnectDefaults && !releaseWhenIdle && !didApplyConnectDefaults {
                 didApplyConnectDefaults = true
                 var desired = state
                 if desired.mode == .off { desired.mode = .noiseCancelling }
@@ -514,6 +546,11 @@ public final class HeadphonesController: ObservableObject {
             pauseWhenTakenOff = enabled
         case .equalizer(let state):
             equalizer = state
+        case .soundQualityCapability(let modes):
+            supportedSoundQualityModes = modes
+        case .soundQuality(let mode):
+            soundQuality = mode
+            soundQualityObservedAt = Date()
         case .bgmMode(let enabled, let roomSize):
             bgmEnabled = enabled
             bgmRoomSize = roomSize
@@ -559,6 +596,12 @@ public final class HeadphonesController: ObservableObject {
         enqueue(SonyCommands.buildBGMModeGet())
         enqueue(SonyCommands.buildUpmixCinemaGet())
         enqueue(SonyCommands.buildDeviceListGet(), type: .command2)
+        if protocolVersion == .v2 { requestSoundQuality() }
+    }
+
+    private func requestSoundQuality() {
+        enqueue(SonyCommands.buildSoundQualityCapabilityGet())
+        enqueue(SonyCommands.buildSoundQualityGet())
     }
 
     // MARK: - Outbound queue

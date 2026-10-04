@@ -42,6 +42,11 @@ let package = Package(
             name: "SonyHeadphonesKitTests",
             dependencies: ["SonyHeadphonesKit"],
             swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
+            name: "XM6ControlTests",
+            dependencies: ["XM6Control", "SonyHeadphonesKit"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
         )
     ]
 )

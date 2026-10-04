@@ -10,6 +10,15 @@ struct SoundCard: View {
                 ListeningModeSection()
                 Divider()
                 EqualizerSection()
+                Divider()
+                CardSection("Bluetooth Quality", icon: "antenna.radiowaves.left.and.right") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        SoundQualityPicker()
+                        Text("Changing this may briefly interrupt audio.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
         }
     }

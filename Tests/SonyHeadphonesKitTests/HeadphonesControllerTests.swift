@@ -57,6 +57,177 @@ final class HeadphonesControllerTests: XCTestCase {
         }
     }
 
+    func testSoundQualityReceiptIsObservedAndMalformedReportsDoNotReplaceIt() async throws {
+        let (controller, connection) = makeController()
+        defer { controller.disconnect() }
+        controller.autoConnect()
+        await handshake(connection)
+        XCTAssertNil(controller.soundQuality)
+        XCTAssertNil(controller.supportedSoundQualityModes)
+        XCTAssertNil(controller.soundQualityObservedAt)
+        // Literal framed captures exercise the parser, dispatch, and controller.
+        connection.onEvent?(.dataReceived([0x3e, 0x0c, 0, 0, 0, 0, 7, 0xe1, 5, 3, 0, 1, 2, 0, 0xff, 0x3c]))
+        let before = Date()
+        connection.onEvent?(.dataReceived([0x3e, 0x0c, 0, 0, 0, 0, 3, 0xe7, 5, 0, 0xfb, 0x3c]))
+        await settle()
+        XCTAssertEqual(controller.supportedSoundQualityModes, [.quality, .stable, .lowLatency])
+        XCTAssertEqual(controller.soundQuality, .quality)
+        let receipt = try XCTUnwrap(controller.soundQualityObservedAt)
+        XCTAssertGreaterThanOrEqual(receipt, before)
+        XCTAssertLessThanOrEqual(receipt, Date())
+        for payload: [UInt8] in [[0xe7, 5], [0xe9, 5, 3], [0xe3, 5, 0, 0], [0xe1, 5, 3, 0, 1, 3, 0]] {
+            connection.reply(payload)
+        }
+        connection.onEvent?(.dataReceived(SonyMessage(type: .command2, sequenceNumber: 0, payload: [0xe9, 5, 1]).encode()))
+        await settle()
+        XCTAssertEqual(controller.soundQuality, .quality)
+        XCTAssertEqual(controller.soundQualityObservedAt, receipt)
+        XCTAssertEqual(controller.supportedSoundQualityModes, [.quality, .stable, .lowLatency])
+        connection.reply([0xe9, 5, 2])
+        await settle()
+        XCTAssertEqual(controller.soundQuality, .lowLatency)
+        XCTAssertGreaterThan(try XCTUnwrap(controller.soundQualityObservedAt), receipt)
+        controller.disconnect()
+        XCTAssertNil(controller.soundQuality)
+        XCTAssertNil(controller.supportedSoundQualityModes)
+        XCTAssertNil(controller.soundQualityObservedAt)
+    }
+
+    func testSoundQualityRejectsUnobservedUnsupportedAndDisconnectedWrites() async {
+        let (controller, connection) = makeController()
+        defer { controller.disconnect() }
+        XCTAssertFalse(controller.setSoundQuality(.stable))
+        XCTAssertTrue(connection.addresses.isEmpty)
+        controller.autoConnect()
+        XCTAssertFalse(controller.setSoundQuality(.stable))
+        await handshake(connection)
+        XCTAssertFalse(controller.setSoundQuality(.stable))
+        connection.reply([0xe1, 5, 1, 1, 0])
+        await settle()
+        XCTAssertFalse(controller.setSoundQuality(.stable)) // current state missing
+        connection.reply([0xe7, 5, 0])
+        await settle()
+        XCTAssertFalse(controller.setSoundQuality(.stable)) // inconsistent reported support/state
+        connection.reply([0xe1, 5, 2, 0, 1, 0])
+        await settle()
+        XCTAssertFalse(controller.setSoundQuality(.lowLatency))
+        await drain(connection)
+        XCTAssertFalse(connection.payloads.contains { $0.first == 0xe8 && $0.dropFirst().first == 5 })
+        controller.disconnect()
+        XCTAssertFalse(controller.setSoundQuality(.stable))
+    }
+
+    func testSoundQualityWritesQueueInOrderWithoutOptimisticStateOrAckConfirmation() async {
+        let (controller, connection) = makeController()
+        defer { controller.disconnect() }
+        controller.autoConnect()
+        await handshake(connection)
+        await drain(connection)
+        connection.reply([0xe1, 5, 3, 0, 1, 2, 0])
+        connection.reply([0xe7, 5, 0])
+        await settle()
+        let receipt = controller.soundQualityObservedAt
+        let offset = connection.payloads.count
+        XCTAssertTrue(controller.setSoundQuality(.stable))
+        XCTAssertTrue(controller.setSoundQuality(.lowLatency))
+        XCTAssertEqual(Array(connection.payloads.dropFirst(offset)), [[0xe8, 5, 1]])
+        XCTAssertEqual(controller.soundQuality, .quality)
+        XCTAssertEqual(controller.soundQualityObservedAt, receipt)
+        connection.ack()
+        await settle()
+        XCTAssertEqual(Array(connection.payloads.dropFirst(offset)), [[0xe8, 5, 1], [0xe8, 5, 2]])
+        connection.ack()
+        await settle()
+        XCTAssertEqual(controller.soundQuality, .quality)
+        XCTAssertEqual(controller.soundQualityObservedAt, receipt)
+        connection.reply([0xe9, 5, 2])
+        await settle()
+        XCTAssertEqual(controller.soundQuality, .lowLatency)
+    }
+
+    func testSoundQualityRefreshReconnectsAndQueriesCapabilityThenState() async {
+        let (controller, connection) = makeController()
+        defer { controller.disconnect() }
+        controller.refreshSoundQuality()
+        XCTAssertEqual(connection.addresses, ["test-device"])
+        XCTAssertTrue(connection.payloads.isEmpty)
+        await handshake(connection)
+        await drain(connection)
+        XCTAssertEqual(Array(connection.payloads.suffix(2)), [[0xe0, 5], [0xe6, 5]])
+        let offset = connection.payloads.count
+        controller.refreshSoundQuality()
+        await drain(connection)
+        XCTAssertEqual(Array(connection.payloads.dropFirst(offset)), [[0xe0, 5], [0xe6, 5]])
+        controller.disconnectIfIdle(now: .now.advanced(by: .seconds(19)))
+        XCTAssertEqual(controller.connectionState, .connected)
+        controller.disconnectIfIdle(now: .now.advanced(by: .seconds(21)))
+        XCTAssertEqual(controller.connectionState, .disconnected)
+        controller.refreshSoundQuality()
+        XCTAssertEqual(connection.addresses.count, 2)
+    }
+
+    func testSoundQualityQueriesAndWritesAreGatedToV2() async {
+        for initReply: [UInt8] in [[1, 0, 0, 0], [1, 0, 0, 0, 0]] {
+            let (controller, connection) = makeController()
+            controller.autoConnect()
+            connection.onEvent?(.opened)
+            await settle()
+            connection.ack()
+            await settle()
+            connection.reply(initReply)
+            await settle()
+            connection.reply([0xe1, 5, 3, 0, 1, 2, 0])
+            connection.reply([0xe7, 5, 0])
+            await settle()
+            XCTAssertFalse(controller.setSoundQuality(.stable))
+            controller.refreshSoundQuality()
+            await drain(connection)
+            XCTAssertFalse(connection.payloads.contains([0xe0, 5]))
+            XCTAssertFalse(connection.payloads.contains([0xe6, 5]))
+            XCTAssertFalse(connection.payloads.contains([0xe8, 5, 1]))
+            controller.disconnect()
+        }
+    }
+
+    func testSoundQualityRefreshReconnectsWhenIdleReleaseIsDisabled() async {
+        let (controller, connection) = makeController()
+        defer { controller.disconnect() }
+        controller.releaseWhenIdle = false
+        controller.disconnect()
+        controller.refreshSoundQuality()
+        XCTAssertEqual(connection.addresses.count, 2)
+        await handshake(connection)
+        await drain(connection)
+        XCTAssertEqual(Array(connection.payloads.suffix(2)), [[0xe0, 5], [0xe6, 5]])
+        connection.reply([0xe1, 5, 3, 0, 1, 2, 0])
+        connection.reply([0xe7, 5, 1])
+        await settle()
+        XCTAssertEqual(controller.soundQuality, .stable)
+        controller.connect(toAddress: "other-headset", name: "WH-1000XM6")
+        XCTAssertNil(controller.soundQuality)
+        XCTAssertNil(controller.supportedSoundQualityModes)
+        XCTAssertNil(controller.soundQualityObservedAt)
+    }
+
+    func testSoundQualityRefreshWithIdleReleaseDisabledDoesNotWriteAmbientDefaults() async {
+        let (controller, connection) = makeController()
+        defer { controller.disconnect() }
+        controller.releaseWhenIdle = false
+        controller.disconnect()
+        XCTAssertTrue(controller.applyConnectDefaults)
+        controller.refreshSoundQuality()
+        XCTAssertFalse(controller.applyConnectDefaults)
+        await handshake(connection)
+        connection.reply([0x67, 0x19, 1, 0, 0, 0, 0, 0, 0])
+        await settle()
+        await drain(connection)
+        XCTAssertEqual(controller.ambientSound?.mode, .off)
+        XCTAssertEqual(controller.ambientSound?.level, 0)
+        XCTAssertFalse(connection.payloads.contains { $0.first == 0x68 })
+        XCTAssertTrue(connection.payloads.contains([0xe0, 5]))
+        XCTAssertTrue(connection.payloads.contains([0xe6, 5]))
+    }
+
     func testStartsDisconnectedAndVisibleSurfacesAcquireOnce() {
         let (controller, connection) = makeController()
         defer { controller.disconnect() }

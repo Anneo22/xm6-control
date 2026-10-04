@@ -61,6 +61,6 @@ final class AppSettings: ObservableObject {
     func shouldHideInitialWindow() -> Bool {
         guard !configuredInitialWindow else { return false }
         configuredInitialWindow = true
-        return releaseWhenIdle && menuBarOnly
+        return CommandLine.arguments.contains("--agent-control") || (releaseWhenIdle && menuBarOnly)
     }
 }

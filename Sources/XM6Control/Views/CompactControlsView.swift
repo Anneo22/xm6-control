@@ -28,6 +28,7 @@ struct CompactControlsView: View {
                 Divider()
                 listeningModeRow
                 equalizerRow
+                SoundQualityPicker()
 
                 if let devices = controller.devices, devices.count > 1 {
                     Divider()

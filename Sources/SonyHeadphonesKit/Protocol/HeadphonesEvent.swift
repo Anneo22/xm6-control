@@ -10,6 +10,8 @@ public enum HeadphonesEvent: Sendable {
     case automaticPowerOff(AutomaticPowerOffMode)
     case pauseWhenTakenOff(Bool)
     case equalizer(EqualizerState)
+    case soundQualityCapability([SoundQualityMode])
+    case soundQuality(SoundQualityMode)
     case bgmMode(enabled: Bool, roomSize: BGMRoomSize)
     case upmixCinema(Bool)
     case deviceList([MultipointDevice])
@@ -35,6 +37,15 @@ public enum SonyEventDecoder {
                 return .deviceList(devices)
             }
             return nil
+        }
+
+        if messageType == .command1 {
+            if let modes = SonyCommands.decodeSoundQualityCapability(payload) {
+                return .soundQualityCapability(modes)
+            }
+            if let mode = SonyCommands.decodeSoundQuality(payload) {
+                return .soundQuality(mode)
+            }
         }
 
         if opcode == Opcode.initReply {

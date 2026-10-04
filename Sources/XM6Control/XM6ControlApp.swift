@@ -6,12 +6,15 @@ import SonyHeadphonesKit
 struct XM6ControlApp: App {
     @StateObject private var controller: HeadphonesController
     @StateObject private var settings: AppSettings
+    private let agentControl: AgentControl
 
     init() {
         ProbeMode.runIfRequested()
         let controller = HeadphonesController()
+        controller.applyConnectDefaults = false
         _controller = StateObject(wrappedValue: controller)
         _settings = StateObject(wrappedValue: AppSettings(controller: controller))
+        agentControl = AgentControl(controller: controller)
     }
 
     var body: some Scene {
@@ -30,6 +33,7 @@ struct XM6ControlApp: App {
                         NSApp.setActivationPolicy(.accessory)
                     } else {
                         settings.apply()
+                        agentControl.start()
                     }
                 }
         }

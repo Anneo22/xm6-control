@@ -17,6 +17,8 @@
 | Noise Cancelling / Ambient Sound / Off | ✅ with ambient level slider (0–20) and Focus on Voice |
 | Listening Mode (Standard / Background Music / Cinema) | ✅ including BGM room size (My Room / Living Room / Cafe) |
 | Equalizer presets (Off, Heavy, Clear, Hard, Soft, Custom) | ✅ XM6-native preset codes |
+| Bluetooth quality preference | Quality, stable connection, or low latency, shown only when reported by the headset |
+| Local commands | Read quality or set a mode with headset confirmation through the running app |
 | Custom equalizer | ✅ ten band faders, written live as you drag |
 | Battery level + charging status | ✅ live updates |
 | Multipoint device list with names | ✅ shows all connected devices |
@@ -30,7 +32,7 @@
 | Light and dark appearance | ✅ every surface tone resolves per system appearance |
 | Adaptive layout | ✅ two columns in a wide window, one in a narrow one |
 
-The app is **event-driven**: 0% CPU at idle, no polling, negligible battery impact. Nothing animates continuously; motion is limited to feedback on your own input and to state changes.
+Bluetooth state is event-driven. Local commands use a private request directory checked every 250 ms; idle checks do not send Bluetooth requests. Nothing animates continuously; motion is limited to feedback on your own input and to state changes.
 
 **Release the headphones when I'm not using the app** is on by default. Opening the window, menu bar panel, or floating widget connects the controls; closing all three releases them after 20 seconds without a command, so Sony Sound Connect can use them again. A visible widget keeps the connection open. Uncheck the setting next to **Show only in the menu bar** to keep the connection open as before.
 
@@ -74,6 +76,25 @@ Ad-hoc-signed apps get a new identity every build, so macOS re-asks for Bluetoot
 To use a photo of your own headphones instead, replace that file (a real PNG with a transparent background, not a WebP), or drop one at `~/Library/Application Support/XM6 Control/headphones.png` to change the in-app image without a rebuild.
 
 The menu bar icon is drawn rather than taken from the photo. A menu bar image has to be a template, which keeps only its alpha, and the photo's three-quarter view collapses into a featureless blob at that size.
+
+### Bluetooth quality and local commands
+
+The **Bluetooth Quality** selector reads the headset's available modes and current preference. A change can briefly interrupt audio. The displayed value changes only when the headset reports it. This preference does not identify or force the negotiated audio codec, and cannot add LDAC or LE Audio support to macOS.
+
+With the app installed at `/Applications/XM6 Control.app`, run:
+
+```sh
+./Scripts/xm6control status
+./Scripts/xm6control quality quality
+./Scripts/xm6control quality stable
+./Scripts/xm6control quality low-latency
+```
+
+Commands share the app's controller and Bluetooth permission. They launch the app with its window hidden when necessary; an existing window stays as it is. With idle release enabled and every control surface closed, the control connection is released after 20 seconds of inactivity. Connecting and reading do not apply noise-control startup defaults.
+
+JSON output includes `quality`, `qualityObservedAt`, and `confirmed`. Confirmation means a fresh headset report was received, including after a write, rather than merely a transport acknowledgement. `cachedState` contains other last-reported settings; those fields are not independently refreshed by a status request. Failures exit nonzero. An unconfirmed write may have changed the headset: read status before retrying. No network listener or automatic quality switching is installed.
+
+Requests use a directory owned by the current user with permissions 0700. Commands are serialized in file creation order and accepted only through the `status` and `quality` interface. To put the helper on your PATH, copy `Scripts/xm6control` to a directory already on your PATH and keep it executable.
 
 ## Architecture
 

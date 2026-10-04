@@ -34,6 +34,8 @@ enum Opcode {
     static let equalizerNotify: UInt8 = 0x59
 
     /// AUDIO parameter family (XM6 generation): BGM mode, upmix cinema, etc.
+    static let audioGetCapability: UInt8 = 0xe0
+    static let audioRetCapability: UInt8 = 0xe1
     static let audioGetParam: UInt8 = 0xe6
     static let audioRetParam: UInt8 = 0xe7
     static let audioSetParam: UInt8 = 0xe8
@@ -78,6 +80,7 @@ enum Opcode {
 }
 
 enum Subtype {
+    static let soundQuality: UInt8 = 0x05
     /// Ambient Sound Control subtype for devices without wind-noise-reduction / ANC-2
     /// hardware support. XM6's coordinator does not declare those capabilities, so this
     /// is the correct subtype for this device.

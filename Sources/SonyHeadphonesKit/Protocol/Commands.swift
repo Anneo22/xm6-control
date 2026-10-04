@@ -192,6 +192,45 @@ public enum SonyCommands {
         opcode == Opcode.equalizerRet || opcode == Opcode.equalizerNotify
     }
 
+    // MARK: - Bluetooth sound quality preference (table 1, protocol v2)
+
+    public static func buildSoundQualityCapabilityGet() -> [UInt8] {
+        [Opcode.audioGetCapability, Subtype.soundQuality]
+    }
+
+    public static func buildSoundQualityGet() -> [UInt8] {
+        [Opcode.audioGetParam, Subtype.soundQuality]
+    }
+
+    /// The ProtocolV2T1 reference defines this write. A live XM6 setter has not
+    /// yet been tested; changing the preference may disconnect Bluetooth audio.
+    public static func buildSoundQualitySet(_ mode: SoundQualityMode) -> [UInt8] {
+        [Opcode.audioSetParam, Subtype.soundQuality, mode.rawValue]
+    }
+
+    /// FW 3.1.5 capture: e1 05 03 00 01 02 00. The final byte is the
+    /// exclusive-feature count. Only the observed empty exclusive list is decoded.
+    public static func decodeSoundQualityCapability(_ payload: [UInt8]) -> [SoundQualityMode]? {
+        guard payload.count >= 4,
+              payload[0] == Opcode.audioRetCapability,
+              payload[1] == Subtype.soundQuality else { return nil }
+        let count = Int(payload[2])
+        guard payload.count == count + 4, payload.last == 0 else { return nil }
+        var modes: [SoundQualityMode] = []
+        for byte in payload[3..<(3 + count)] {
+            guard let mode = SoundQualityMode(rawValue: byte), !modes.contains(mode) else { return nil }
+            modes.append(mode)
+        }
+        return modes
+    }
+
+    public static func decodeSoundQuality(_ payload: [UInt8]) -> SoundQualityMode? {
+        guard payload.count == 3,
+              payload[0] == Opcode.audioRetParam || payload[0] == Opcode.audioNotifyParam,
+              payload[1] == Subtype.soundQuality else { return nil }
+        return SoundQualityMode(rawValue: payload[2])
+    }
+
     // MARK: - Listening Mode (Standard / Background Music / Cinema)
     //
     // AUDIO parameter family (0xe6...0xe9). Two independent on/off parameters:
