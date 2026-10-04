@@ -17,7 +17,7 @@
 | Noise Cancelling / Ambient Sound / Off | ✅ with ambient level slider (0–20) and Focus on Voice |
 | Listening Mode (Standard / Background Music / Cinema) | ✅ including BGM room size (My Room / Living Room / Cafe) |
 | Equalizer presets (Off, Heavy, Clear, Hard, Soft, Custom) | ✅ XM6-native preset codes |
-| Bluetooth quality preference | Quality, stable connection, or low latency, shown only when reported by the headset |
+| Bluetooth quality preference | Verified quality and stable-connection controls; reported low latency is read only |
 | Local commands | Read quality or set a mode with headset confirmation through the running app |
 | Custom equalizer | ✅ ten band faders, written live as you drag |
 | Battery level + charging status | ✅ live updates |
@@ -79,7 +79,7 @@ The menu bar icon is drawn rather than taken from the photo. A menu bar image ha
 
 ### Bluetooth quality and local commands
 
-The **Bluetooth Quality** selector reads the headset's available modes and current preference. A change can briefly interrupt audio. The displayed value changes only when the headset reports it. This preference does not identify or force the negotiated audio codec, and cannot add LDAC or LE Audio support to macOS. On tested XM6 firmware 3.1.5, quality and stable-connection changes were confirmed; low latency was advertised but its writes were ignored. An advertised mode does not guarantee that a write will be accepted.
+The **Bluetooth Quality** selector reads the headset's current preference and offers quality or stable connection when advertised. A change can briefly interrupt audio. The displayed value changes only when the headset reports it. This preference does not identify or force the negotiated audio codec, and cannot add LDAC or LE Audio support to macOS. On tested XM6 firmware 3.1.5, quality and stable-connection changes were confirmed; low latency was advertised but its writes were ignored. Low latency is therefore readable but not offered as a writable choice. An advertised mode does not guarantee that a write will be accepted.
 
 With the app installed at `/Applications/XM6 Control.app`, run:
 
@@ -87,12 +87,11 @@ With the app installed at `/Applications/XM6 Control.app`, run:
 ./Scripts/xm6control status
 ./Scripts/xm6control quality quality
 ./Scripts/xm6control quality stable
-./Scripts/xm6control quality low-latency
 ```
 
 Commands share the app's controller and Bluetooth permission. They launch the app with its window hidden when necessary; an existing window stays as it is. With idle release enabled and every control surface closed, the control connection is released after 20 seconds of inactivity. Connecting and reading do not apply noise-control startup defaults.
 
-JSON output includes `quality`, `qualityObservedAt`, and `confirmed`. Confirmation means a fresh headset report was received, including after a write, rather than merely a transport acknowledgement. `cachedState` contains other last-reported settings; those fields are not independently refreshed by a status request. Failures exit nonzero. An unconfirmed write may have changed the headset: read status before retrying. No network listener or automatic quality switching is installed.
+JSON output includes `quality`, `qualityObservedAt`, and `confirmed`. `supportedQualityModes` is the headset's advertised list; `writableQualityModes` contains the choices this app can change. Confirmation means a fresh headset report was received, including after a write, rather than merely a transport acknowledgement. `cachedState` contains other last-reported settings; those fields are not independently refreshed by a status request. Failures exit nonzero. An unconfirmed write may have changed the headset: read status before retrying. No network listener or automatic quality switching is installed.
 
 Requests use a directory owned by the current user with permissions 0700. Commands are serialized in file creation order and accepted only through the `status` and `quality` interface. To put the helper on your PATH, copy `Scripts/xm6control` to a directory already on your PATH and keep it executable.
 

@@ -117,6 +117,26 @@ final class HeadphonesControllerTests: XCTestCase {
         XCTAssertFalse(controller.setSoundQuality(.stable))
     }
 
+    func testAdvertisedLowLatencyDoesNotQueueAnUnverifiedWrite() async {
+        let (controller, connection) = makeController()
+        defer { controller.disconnect() }
+        controller.autoConnect()
+        await handshake(connection)
+        await drain(connection)
+        connection.reply([0xe1, 5, 3, 0, 1, 2, 0])
+        connection.reply([0xe7, 5, 0])
+        await settle()
+        XCTAssertEqual(controller.supportedSoundQualityModes, [.quality, .stable, .lowLatency])
+        let count = connection.payloads.count
+        XCTAssertFalse(controller.setSoundQuality(.lowLatency))
+        await settle()
+        XCTAssertEqual(connection.payloads.count, count)
+        XCTAssertEqual(controller.soundQuality, .quality)
+        connection.reply([0xe9, 5, 2, 1])
+        await settle()
+        XCTAssertEqual(controller.soundQuality, .lowLatency) // Reports remain readable.
+    }
+
     func testSoundQualityWritesQueueInOrderWithoutOptimisticStateOrAckConfirmation() async {
         let (controller, connection) = makeController()
         defer { controller.disconnect() }
@@ -129,13 +149,13 @@ final class HeadphonesControllerTests: XCTestCase {
         let receipt = controller.soundQualityObservedAt
         let offset = connection.payloads.count
         XCTAssertTrue(controller.setSoundQuality(.stable))
-        XCTAssertTrue(controller.setSoundQuality(.lowLatency))
+        XCTAssertTrue(controller.setSoundQuality(.quality))
         XCTAssertEqual(Array(connection.payloads.dropFirst(offset)), [[0xe8, 5, 1, 1]])
         XCTAssertEqual(controller.soundQuality, .quality)
         XCTAssertEqual(controller.soundQualityObservedAt, receipt)
         connection.ack()
         await settle()
-        XCTAssertEqual(Array(connection.payloads.dropFirst(offset)), [[0xe8, 5, 1, 1], [0xe8, 5, 2, 1]])
+        XCTAssertEqual(Array(connection.payloads.dropFirst(offset)), [[0xe8, 5, 1, 1], [0xe8, 5, 0, 1]])
         connection.ack()
         await settle()
         XCTAssertEqual(controller.soundQuality, .quality)

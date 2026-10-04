@@ -256,7 +256,7 @@ public final class HeadphonesController: ObservableObject {
     /// Only device RET/NOTIFY reports change the observed preference and timestamp.
     @discardableResult
     public func setSoundQuality(_ mode: SoundQualityMode) -> Bool {
-        guard connectionState == .connected, protocolVersion == .v2,
+        guard mode.canWriteLocally, connectionState == .connected, protocolVersion == .v2,
               let current = soundQuality, soundQualityObservedAt != nil,
               let supported = supportedSoundQualityModes,
               supported.contains(current), supported.contains(mode) else { return false }

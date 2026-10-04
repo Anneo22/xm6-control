@@ -69,6 +69,20 @@ final class AgentControlTests: XCTestCase {
         XCTAssertEqual(controller.soundQuality, .lowLatency)
     }
 
+    func testLowLatencyRequestFailsWithoutWriting() async throws {
+        let (controller, connection, service, directory) = try await fixture()
+        defer { controller.disconnect(); try? FileManager.default.removeItem(at: directory) }
+        var writes = 0
+        connection.qualitySet = { _ in writes += 1 }
+        let response = try request(directory, value: "low-latency")
+        await service.processNextRequest()
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: response)) as? [String: Any])
+        XCTAssertEqual(body["ok"] as? Bool, false)
+        XCTAssertTrue((body["error"] as? String)?.contains("Low latency is not available") == true)
+        XCTAssertEqual(writes, 0)
+        XCTAssertEqual(controller.soundQuality, .quality)
+    }
+
     func testQualityFromResetSessionCannotConfirmStatus() async throws {
         let (controller, connection, service, directory) = try await fixture()
         defer { controller.disconnect(); try? FileManager.default.removeItem(at: directory) }

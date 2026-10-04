@@ -11,7 +11,10 @@ struct SoundQualityPicker: View {
                 get: { controller.soundQuality ?? current },
                 set: { controller.setSoundQuality($0) }
             )) {
-                ForEach(modes) { mode in Text(mode.label).tag(mode) }
+                ForEach(modes.filter(\.canWriteLocally)) { mode in Text(mode.label).tag(mode) }
+                if !current.canWriteLocally {
+                    Text("\(current.label) (read only)").tag(current).disabled(true)
+                }
             }
             .pickerStyle(.menu)
             .accessibilityLabel("Bluetooth sound quality")

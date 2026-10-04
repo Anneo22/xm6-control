@@ -82,11 +82,12 @@ final class AgentControl {
     }
 
     private enum ControlError: LocalizedError {
-        case invalidRequest, unsupported, noReadback, writeUnconfirmed
+        case invalidRequest, unsupported, unavailableWrite, noReadback, writeUnconfirmed
         var errorDescription: String? {
             switch self {
-            case .invalidRequest: return "Invalid local control request. Use xm6control status or quality quality|stable|low-latency."
+            case .invalidRequest: return "Invalid local control request. Use xm6control status or quality quality|stable."
             case .unsupported: return "The headphones did not report support for this sound-quality mode."
+            case .unavailableWrite: return "Low latency is not available through this Mac control interface. Use quality or stable."
             case .noReadback: return "No fresh quality-mode reply from the headphones. Close Sony Sound Connect on the phone, then retry."
             case .writeUnconfirmed: return "The command was sent, but the headphones did not confirm the requested mode. Check xm6control status before retrying a write."
             }
@@ -100,6 +101,7 @@ final class AgentControl {
                   let mode = SoundQualityMode.allCases.first(where: { $0.commandValue == value }) else {
                 throw ControlError.invalidRequest
             }
+            guard mode.canWriteLocally else { throw ControlError.unavailableWrite }
             desired = mode
         } else {
             guard request.value == nil else { throw ControlError.invalidRequest }
@@ -158,6 +160,7 @@ final class AgentControl {
             "qualityObservedAt": ISO8601DateFormatter().string(from: observedAt),
         ]
         if let modes = controller.supportedSoundQualityModes { result["supportedQualityModes"] = modes.map(\.commandValue) }
+        if let modes = controller.supportedSoundQualityModes { result["writableQualityModes"] = modes.filter(\.canWriteLocally).map(\.commandValue) }
         var cached: [String: Any] = [:]
         if let battery = controller.battery { cached["batteryPercent"] = battery.level }
         if let ambient = controller.ambientSound {

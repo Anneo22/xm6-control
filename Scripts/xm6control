@@ -16,7 +16,7 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("status", help="Read the quality mode from the headphones")
     quality = commands.add_parser("quality", help="Set a quality mode and confirm headset readback")
-    quality.add_argument("value", choices=["quality", "stable", "low-latency"])
+    quality.add_argument("value", choices=["quality", "stable"])
     args = parser.parse_args()
 
     directory = Path(tempfile.gettempdir()) / f"XM6Control-{os.getuid()}"
