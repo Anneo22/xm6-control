@@ -14,10 +14,9 @@ You need macOS 13 or later, Xcode Command Line Tools, and a WH-1000XM6 paired in
 git clone https://github.com/Anneo22/xm6-control.git
 cd xm6-control
 ./Scripts/build_app.sh
-open ".build/XM6 Control.app"
 ```
 
-The script builds and signs a double-clickable app. Copy it to `/Applications` for the local commands below. Allow Bluetooth access on first launch. Ad-hoc signing can prompt again after a rebuild; a code-signing certificate named `XM6Dev` gives builds a stable identity. Set `XM6_SIGN_IDENTITY` to use a different certificate.
+The script builds and signs a double-clickable app, then prints its launch command. Rebuilds keep the previous bundle and use a fresh output directory. Copy the new app to `/Applications` for the local commands below. Allow Bluetooth access on first launch. Ad-hoc signing can prompt again after a rebuild; a code-signing certificate named `XM6Dev` gives builds a stable identity. Set `XM6_SIGN_IDENTITY` to use a different certificate.
 
 ## Controls
 

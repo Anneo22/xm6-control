@@ -37,7 +37,10 @@ elif [ ! -f "${ICON_OUT}" ]; then
 fi
 
 echo "==> Assembling ${APP_NAME}.app..."
-if [ -d "${APP_DIR}" ]; then /usr/bin/trash "${APP_DIR}"; fi
+# Keep earlier builds: packaging does not need a deletion utility.
+if [ -e "${APP_DIR}" ]; then
+    APP_DIR="$(mktemp -d .build/app.XXXXXX)/${APP_NAME}.app"
+fi
 mkdir -p "${APP_DIR}/Contents/MacOS"
 mkdir -p "${APP_DIR}/Contents/Resources"
 

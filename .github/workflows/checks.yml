@@ -23,3 +23,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 Scripts/check_leaks.py
+  packaging:
+    name: Repeat builds and licence bundle
+    runs-on: macos-15
+    env:
+      XM6_SIGN_IDENTITY: XM6ReleaseAdHocOnly
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          ./Scripts/build_app.sh
+          ./Scripts/build_app.sh
+      - run: |
+          python3 - <<'PYTHON'
+          from pathlib import Path
+          import subprocess
+          bundles = list(Path(".build").glob("**/XM6 Control.app"))
+          assert len(bundles) >= 2, "Repeat builds must preserve both app bundles"
+          for bundle in bundles:
+              subprocess.run(["codesign", "--verify", "--deep", "--strict", str(bundle)], check=True)
+              assert (bundle / "Contents/MacOS/XM6Control").is_file()
+              for source in ["LICENSE", "LICENSE-APACHE", "NOTICE.md", "docs/Literata-OFL.txt"]:
+                  packaged = bundle / "Contents/Resources/Licences" / Path(source).name
+                  assert packaged.read_bytes() == Path(source).read_bytes(), source
+          print("Both signed app bundles contain the current licence notices")
+          PYTHON
