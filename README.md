@@ -1,4 +1,4 @@
-<h1><a href="https://abcastor.com"><img src="docs/readme-mark.svg" width="40" height="40" align="absmiddle" alt=""></a> <img src="docs/readme-title.svg" width="212" align="absmiddle" alt="XM6 Control*"></h1>
+<h1><img src="docs/readme-mark.svg" width="40" height="40" align="absmiddle" alt=""> <img src="docs/readme-title.svg" width="212" align="absmiddle" alt="XM6 Control*"></h1>
 
 XM6 Control is a native macOS app for controlling Sony WH-1000XM6 headphones over Bluetooth. This personal fork of [Rui Martins's app](https://github.com/ruimartins23/xm6-control) adds confirmed quality controls, local commands, and automatic release of the control connection.
 
