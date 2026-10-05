@@ -10,6 +10,10 @@ struct ConnectionUsage {
     private(set) var idleDeadline: ContinuousClock.Instant?
     var hasVisibleSurfaces: Bool { !visibleSurfaces.isEmpty }
 
+    init(releaseWhenIdle: Bool = false) {
+        self.releaseWhenIdle = releaseWhenIdle
+    }
+
     mutating func setSurface(_ id: UUID, visible: Bool, now: ContinuousClock.Instant = .now) -> Bool {
         let changed: Bool
         if visible {
