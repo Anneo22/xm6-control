@@ -9,19 +9,19 @@ jobs:
     name: Syntax and build
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - run: ./Scripts/check_syntax.sh
   behaviour:
     name: Protocol and controller behaviour
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - run: swift test
   leaks:
     name: Private data patterns
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - run: python3 Scripts/check_leaks.py
   packaging:
     name: Repeat builds and licence bundle
@@ -29,7 +29,7 @@ jobs:
     env:
       XM6_SIGN_IDENTITY: XM6ReleaseAdHocOnly
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - run: |
           ./Scripts/build_app.sh
           ./Scripts/build_app.sh
