@@ -1,0 +1,25 @@
+name: Checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  syntax:
+    name: Syntax and build
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./Scripts/check_syntax.sh
+  behaviour:
+    name: Protocol and controller behaviour
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test
+  leaks:
+    name: Private data patterns
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 Scripts/check_leaks.py

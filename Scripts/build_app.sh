@@ -45,6 +45,10 @@ cp "${BUILD_DIR}/XM6Control" "${APP_DIR}/Contents/MacOS/XM6Control"
 cp "Sources/XM6Control/Resources/Info.plist" "${APP_DIR}/Contents/Info.plist"
 cp "Sources/XM6Control/Resources/AppIcon.icns" "${APP_DIR}/Contents/Resources/AppIcon.icns"
 
+# Licence notices travel with the distributable app.
+mkdir -p "${APP_DIR}/Contents/Resources/Licences"
+cp LICENSE LICENSE-APACHE NOTICE.md docs/Literata-OFL.txt "${APP_DIR}/Contents/Resources/Licences/"
+
 # Optional hero photo: drop your own headphones.png into Resources and it appears in-app.
 if [ -f "Sources/XM6Control/Resources/headphones.png" ]; then
     cp "Sources/XM6Control/Resources/headphones.png" "${APP_DIR}/Contents/Resources/headphones.png"

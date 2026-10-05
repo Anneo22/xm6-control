@@ -1,87 +1,39 @@
-# XM6 Control
+<h1><a href="https://abcastor.com"><img src="docs/readme-mark.svg" width="40" height="40" align="absmiddle" alt=""></a> <img src="docs/readme-title.svg" width="212" align="absmiddle" alt="XM6 Control*"></h1>
 
-**A native macOS app for the Sony WH-1000XM6.** Control noise cancelling, ambient sound, equalizer, listening modes, and multipoint directly from your Mac. No Sony app required, no Electron, no cloud: just Swift, SwiftUI, and a direct Bluetooth connection to your headphones.
+XM6 Control is a native macOS app for controlling Sony WH-1000XM6 headphones over Bluetooth. This personal fork of [Rui Martins's app](https://github.com/ruimartins23/xm6-control) adds confirmed quality controls, local commands, and automatic release of the control connection.
 
-> Sony ships its Sound Connect companion app for iOS and Android, but not for macOS. This project fills that gap with a first-class Mac experience: a Liquid Glass interface, a menu bar panel, and a floating desktop widget, all speaking Sony's native headphone protocol over Bluetooth RFCOMM.
+[![Checks](https://github.com/Anneo22/xm6-control/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/Anneo22/xm6-control/actions/workflows/checks.yml)
 
-<p align="center">
-  <img src="docs/screenshot.png" alt="XM6 Control dashboard showing ambient sound control, listening mode, equalizer, speak-to-chat and wearing detection" width="450">
-</p>
+<p><img src="docs/screenshot.png" alt="XM6 Control dashboard with noise control, listening mode and equalizer" width="450"></p>
 
----
+## Build and run
 
-## Features
-
-| Feature | Status |
-|---|---|
-| Noise Cancelling / Ambient Sound / Off | ✅ with ambient level slider (0–20) and Focus on Voice |
-| Listening Mode (Standard / Background Music / Cinema) | ✅ including BGM room size (My Room / Living Room / Cafe) |
-| Equalizer presets (Off, Heavy, Clear, Hard, Soft, Custom) | ✅ XM6-native preset codes |
-| Bluetooth quality preference | Verified quality and stable-connection controls; reported low latency is read only |
-| Local commands | Read quality or set a mode with headset confirmation through the running app |
-| Custom equalizer | ✅ ten band faders, written live as you drag |
-| Battery level + charging status | ✅ live updates |
-| Multipoint device list with names | ✅ shows all connected devices |
-| Playback source switching ("Play here") | ✅ one click |
-| Speak-to-Chat (sensitivity + resume timing) | ✅ |
-| Wearing detection (pause when taken off) | ✅ |
-| Automatic power off | ✅ |
-| Menu bar quick controls | ✅ full control without opening the app |
-| Floating desktop widget | ✅ draggable, all-Spaces, remembers position |
-| Menu-bar-only mode | ✅ optional, hides the Dock icon; on by choice, not by default |
-| Light and dark appearance | ✅ every surface tone resolves per system appearance |
-| Adaptive layout | ✅ two columns in a wide window, one in a narrow one |
-
-Bluetooth state is event-driven. Local commands use a private request directory checked every 250 ms; idle checks do not send Bluetooth requests. Nothing animates continuously; motion is limited to feedback on your own input and to state changes.
-
-**Release the headphones when I'm not using the app** is on by default. Opening the window, menu bar panel, or floating widget connects the controls; closing all three releases them after 20 seconds without a command, so Sony Sound Connect can use them again. A visible widget keeps the connection open. Uncheck the setting next to **Show only in the menu bar** to keep the connection open as before.
-
-## Requirements
-
-- macOS 13+ (Liquid Glass styling on macOS 26+, graceful fallback below)
-- Xcode Command Line Tools (`xcode-select --install`). Full Xcode is not required
-- A Sony WH-1000XM6 paired in **System Settings → Bluetooth**
-
-## Build & Run
+You need macOS 13 or later, Xcode Command Line Tools, and a WH-1000XM6 paired in System Settings. Full Xcode is not required. Liquid Glass styling is available on macOS 26; earlier versions use the fallback appearance.
 
 ```sh
-git clone <this-repo>
+git clone https://github.com/Anneo22/xm6-control.git
 cd xm6-control
 ./Scripts/build_app.sh
 open ".build/XM6 Control.app"
 ```
 
-That's it. The script builds with SwiftPM, packages a double-clickable `.app`, generates the app icon, and signs the bundle. Drag `XM6 Control.app` to `/Applications` if you want it permanent, and add it to **System Settings → General → Login Items** to start it at login.
+The script builds and signs a double-clickable app. Copy it to `/Applications` for the local commands below. Allow Bluetooth access on first launch. Ad-hoc signing can prompt again after a rebuild; a code-signing certificate named `XM6Dev` gives builds a stable identity. Set `XM6_SIGN_IDENTITY` to use a different certificate.
 
-On first launch macOS asks for Bluetooth permission. Click **Allow**. Make sure the headphones are powered on and connected as an audio device before hitting **Try Again** if the first connection races.
+## Controls
 
-### Window or menu bar
+The window, menu bar panel, and floating widget offer noise cancelling, ambient level and voice focus, listening modes, a ten-band equalizer, battery status, multipoint device selection, Speak-to-Chat, wearing detection, and automatic power-off. The app supports light and dark appearance and an optional menu-bar-only mode.
 
-By default XM6 Control behaves like a normal Mac app: a Dock icon, and a window when you open it. The menu bar panel is always there too, so quick changes never need the window.
+**Release the headphones when I'm not using the app** is enabled by default. Closing the window, panel, and widget releases the control connection after 20 seconds without a command, allowing Sony Sound Connect to take over. A visible widget keeps the controls connected. Audio stays connected. You can disable idle release in the app.
 
-If you would rather it stay out of the way entirely, tick **Show only in the menu bar** at the bottom of the window. That drops the Dock icon and the app-switcher entry, and the menu bar panel becomes the whole interface. The same checkbox lives in that panel, so unticking it brings the window and Dock icon back.
+### Bluetooth quality
 
-### Avoiding permission re-prompts across rebuilds
+Quality and stable-connection writes were confirmed on XM6 firmware 3.1.5. Low latency was advertised but its writes were ignored, so it is read only. A mode changes on screen only after the headset reports it; a change can briefly interrupt audio.
 
-Ad-hoc-signed apps get a new identity every build, so macOS re-asks for Bluetooth each rebuild. To fix this permanently, create a self-signed signing certificate once:
+The quality preference does not identify or force the negotiated audio codec. It cannot add LDAC or LE Audio support to macOS. Other firmware may behave differently, and the software tests cannot prove headset acceptance.
 
-1. **Keychain Access → Certificate Assistant → Create a Certificate…**
-2. Name: `XM6Dev` · Identity Type: *Self-Signed Root* · Certificate Type: **Code Signing**
-3. Rebuild. The script detects `XM6Dev` automatically and uses it from then on.
+### Local commands
 
-### Artwork
-
-`Sources/XM6Control/Resources/headphones.png` drives two things: the image at the top of the dashboard, and the app icon. The build script trims it to its opaque bounds and generates `AppIcon.icns` from it, so the Dock icon is the headphones themselves. A checkout without that file falls back to original vector artwork for both.
-
-To use a photo of your own headphones instead, replace that file (a real PNG with a transparent background, not a WebP), or drop one at `~/Library/Application Support/XM6 Control/headphones.png` to change the in-app image without a rebuild.
-
-The menu bar icon is drawn rather than taken from the photo. A menu bar image has to be a template, which keeps only its alpha, and the photo's three-quarter view collapses into a featureless blob at that size.
-
-### Bluetooth quality and local commands
-
-The **Bluetooth Quality** selector reads the headset's current preference and offers quality or stable connection when advertised. A change can briefly interrupt audio. The displayed value changes only when the headset reports it. This preference does not identify or force the negotiated audio codec, and cannot add LDAC or LE Audio support to macOS. On tested XM6 firmware 3.1.5, quality and stable-connection changes were confirmed; low latency was advertised but its writes were ignored. Low latency is therefore readable but not offered as a writable choice. An advertised mode does not guarantee that a write will be accepted.
-
-With the app installed at `/Applications/XM6 Control.app`, run:
+With the app installed in `/Applications`:
 
 ```sh
 ./Scripts/xm6control status
@@ -89,87 +41,33 @@ With the app installed at `/Applications/XM6 Control.app`, run:
 ./Scripts/xm6control quality stable
 ```
 
-Commands share the app's controller and Bluetooth permission. They launch the app with its window hidden when necessary; an existing window stays as it is. With idle release enabled and every control surface closed, the control connection is released after 20 seconds of inactivity. Connecting and reading do not apply noise-control startup defaults.
+The helper shares the app's controller and Bluetooth permission. It launches the app with its window hidden if necessary. Connecting and reading do not apply noise-control startup defaults.
 
-JSON output includes `quality`, `qualityObservedAt`, and `confirmed`. `supportedQualityModes` is the headset's advertised list; `writableQualityModes` contains the choices this app can change. Confirmation means a fresh headset report was received, including after a write, rather than merely a transport acknowledgement. `cachedState` contains other last-reported settings; those fields are not independently refreshed by a status request. Failures exit nonzero. An unconfirmed write may have changed the headset: read status before retrying. No network listener or automatic quality switching is installed.
+JSON includes `quality`, `qualityObservedAt`, and `confirmed`. Confirmation requires a fresh headset report, including after a write. `supportedQualityModes` lists advertised modes; `writableQualityModes` lists the choices the app can change. Other fields under `cachedState` are last-reported values and are not refreshed independently by a status request.
 
-Requests use a directory owned by the current user with permissions 0700. Commands are serialized in file creation order and accepted only through the `status` and `quality` interface. To put the helper on your PATH, copy `Scripts/xm6control` to a directory already on your PATH and keep it executable.
-
-## Architecture
-
-Two SwiftPM targets, cleanly separated:
-
-```
-Sources/
-├── SonyHeadphonesKit/          # Protocol + transport library (no UI)
-│   ├── Protocol/
-│   │   ├── SonyMessage.swift   #   Frame encode/decode, escaping, checksum
-│   │   ├── FrameParser.swift   #   Streaming frame reassembly
-│   │   ├── Opcodes.swift       #   Command opcode tables (both message tables)
-│   │   ├── Commands.swift      #   Payload builders + validating decoders
-│   │   └── HeadphonesEvent.swift # Typed events from raw payloads
-│   ├── Models/                 #   AmbientSoundState, EqualizerPreset, ...
-│   ├── RFCOMMConnection.swift  #   IOBluetooth RFCOMM channel management
-│   ├── HeadphonesController.swift # Session orchestration, ACK/sequence, state
-│   └── ProtocolLog.swift       #   Optional hex-dump debug log
-└── XM6Control/                 # SwiftUI app
-    ├── XM6ControlApp.swift     #   Main window + menu bar extra + desktop widget
-    └── Views/                  #   Dashboard cards, compact controls, widget
-```
-
-### Protocol notes
-
-The XM6 speaks Sony's proprietary MDR protocol over RFCOMM (service UUID `96CC203E-5068-46ad-B32D-E316F5E069BA`): framed messages with an alternating sequence bit, per-frame ACKs, and two independent opcode tables. The XM6 generation moved several features to new command families relative to older 1000X models: the equalizer answers a different inquired type, wearing detection moved to the SYSTEM family, and multipoint management lives on the second message table. All command layouts used here were verified against a live WH-1000XM6 (firmware 3.x) via the built-in protocol log.
-
-Enable **Debug logging** at the bottom of the main window to capture a hex transcript of every frame at `~/Library/Application Support/XM6 Control/protocol.log`. That transcript is what makes adding features or supporting new firmware practical.
+Failures exit nonzero. An unconfirmed write may have changed the headset: read status before retrying. Requests use a private directory owned by the current user, are serialized, and expose only `status` and `quality`. No network listener or automatic quality switching is installed.
 
 ## Troubleshooting
 
-| Symptom | Fix |
-|---|---|
-| "Couldn't find a paired WH-1000XM6" | Pair the headphones in System Settings → Bluetooth first |
-| Connect fails immediately | Make sure the headphones show as *Connected* (audio) in the Bluetooth menu, then Try Again |
-| Another device may be using the headphones | Close Sony Sound Connect on your phone, then Try Again. The headphones accept one control connection at a time |
-| Sony Sound Connect cannot connect while XM6 Control runs | Enable **Release the headphones when I'm not using the app**, close the window, menu bar panel, and widget, then wait 20 seconds. Audio stays connected |
-| Stuck on "Connecting…", or "macOS reported no Bluetooth services" | Disconnect and reconnect the headphones. See [below](#stuck-on-connecting-disconnect-and-reconnect) |
-| Bluetooth permission prompt after rebuild | Expected with ad-hoc signing. See the `XM6Dev` certificate setup above |
-| A card shows "state not reported" | That query wasn't answered; controls still work. Enable debug logging and open an issue with the log |
-| Menu bar icon missing | The app may not be running. Launch it again |
-| No Dock icon and no window | "Show only in the menu bar" is enabled. Uncheck it from the menu bar panel to get the window and Dock icon back |
+- If the headset is not found, pair it in System Settings and connect it for audio before trying again.
+- The headphones accept one control connection at a time. Close Sony Sound Connect before connecting this app. To return control to the phone, close all app surfaces and wait for idle release.
+- If audio works but controls cannot connect, disconnect and reconnect the headphones from the Bluetooth menu. macOS sometimes establishes audio without publishing the control service.
+- If a card says state was not reported, that query received no answer. Debug logging in the main window records protocol frames under the app's Application Support folder. Review logs for device information before sharing them.
 
-### Stuck on "Connecting…": disconnect and reconnect
-
-Occasionally the headphones connect to macOS for **audio only**, without the rest of the Bluetooth profiles. Music plays normally, so everything looks fine, but the Sony control service isn't published, and there is nothing for the app to talk to.
-
-You can confirm it:
+## Development
 
 ```sh
-system_profiler SPBluetoothDataType | grep -A6 "WH-1000XM6"
+swift test
+./Scripts/check_syntax.sh
+python3 Scripts/check_leaks.py
 ```
 
-Look at the `Services:` line. A healthy link looks like this:
+`SonyHeadphonesKit` handles the framed Sony MDR protocol and IOBluetooth transport. `XM6Control` supplies the SwiftUI app and local command bridge. `XM6Probe` is a developer tool for raw protocol investigations; it can send headset commands, so use it only when you understand the payload.
 
-```
-Services: 0x800039 < HFP AVRCP A2DP HID ACL >
-```
+The protocol work draws on [Gadgetbridge](https://codeberg.org/Freeyourgadget/Gadgetbridge), [SonyHeadphonesClient](https://github.com/Plutoberth/SonyHeadphonesClient), and the [mos9527 fork](https://github.com/mos9527/SonyHeadphonesClient). This project is independent of Sony; Sony and its product names remain their respective trademarks.
 
-A degraded one shows only `< A2DP ACL >`. In that state macOS reports **no service records at all** for the headphones, service discovery returns nothing, and no RFCOMM channel can be opened.
+## Licence
 
-**The fix is to disconnect the headphones and reconnect them** from the Bluetooth menu, which makes macOS renegotiate the full set of profiles. If the `Services:` line still comes back short, remove the device in System Settings → Bluetooth and pair it again to force fresh service discovery.
+Upstream code remains under [Rui Martins's MIT licence](LICENSE), with its full notice retained. Original additions owned by Anneo22 are available under [Apache 2.0](LICENSE-APACHE); [NOTICE.md](NOTICE.md) defines that boundary. This is not a blanket relicensing of the upstream app. The outlined title uses Literata under its [SIL Open Font Licence](docs/Literata-OFL.txt).
 
-This is a quirk of how the link is negotiated, not something the app can repair from its side: the profiles are already missing by the time it connects. What the app does do is stop waiting: it gives up after about 8 seconds, retries once, and then tells you what happened instead of spinning indefinitely.
-
-## Acknowledgements
-
-This project stands on the shoulders of the open-source Sony reverse-engineering community:
-
-- [Gadgetbridge](https://codeberg.org/Freeyourgadget/Gadgetbridge), the most battle-tested implementation of the Sony MDR protocol
-- [SonyHeadphonesClient](https://github.com/Plutoberth/SonyHeadphonesClient) and the [mos9527 fork](https://github.com/mos9527/SonyHeadphonesClient), whose XM6 support documented the new-generation command families
-
-## Disclaimer
-
-This is an independent open-source project. It is not affiliated with, endorsed by, or supported by Sony. "Sony", "WH-1000XM6", and "Sound Connect" are trademarks of Sony Group Corporation. Use at your own risk.
-
-## License
-
-[MIT](LICENSE)
+<p><a href="https://abcastor.com"><img src="docs/castor-footer.svg" width="350" alt="Chip, the Castor beaver, by Castor, we give a dam"></a></p>
