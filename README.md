@@ -69,4 +69,4 @@ The protocol work draws on [Gadgetbridge](https://codeberg.org/Freeyourgadget/Ga
 
 Upstream code remains under [Rui Martins's MIT licence](LICENSE), with its full notice retained. Original additions owned by Anneo22 are available under [Apache 2.0](LICENSE-APACHE); [NOTICE.md](NOTICE.md) defines that boundary. This is not a blanket relicensing of the upstream app. The outlined title uses Literata under its [SIL Open Font Licence](docs/Literata-OFL.txt).
 
-<p><a href="https://abcastor.com"><img src="docs/castor-footer.svg" width="350" alt="Chip, the Castor beaver, by Castor, we give a dam"></a></p>
+<p><a href="https://abcastor.com"><img src="docs/castor-footer.svg" width="350" alt="Chip, the Castor beaver, Castor, we give a dam"></a></p>
